@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/format.dart';
+import '../../core/member_guard.dart';
+import '../../core/theme.dart';
 import '../../data/member_repository.dart';
 import '../../data/notification_repository.dart';
 import '../../data/savings_repository.dart';
+import '../../widgets/ksp_ui.dart';
 import '../profile/member_card.dart';
+import '../savings/savings_setor_flow.dart';
 
 class BerandaTab extends ConsumerWidget {
   const BerandaTab({super.key});
@@ -21,70 +24,72 @@ class BerandaTab extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Beranda'),
         actions: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined),
-                onPressed: () => context.push('/notifications'),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton.filledTonal(
+              style: IconButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
               ),
-              if (unread > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text('$unread',
-                        style: const TextStyle(color: Colors.white, fontSize: 10)),
-                  ),
-                ),
-            ],
+              icon: Badge(
+                isLabelVisible: unread > 0,
+                label: Text('$unread'),
+                child: const Icon(Icons.notifications_outlined),
+              ),
+              onPressed: () => context.push('/notifications'),
+            ),
           ),
         ],
       ),
       body: RefreshIndicator(
+        color: kBrandColor,
         onRefresh: () async {
           ref.read(memberRefreshProvider.notifier).state++;
           ref.read(dataRefreshProvider.notifier).state++;
         },
         child: memberAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _ErrorView(message: '$e'),
+          error: (e, _) => KspEmptyState(
+            icon: Icons.error_outline_rounded,
+            title: 'Gagal memuat',
+            subtitle: '$e',
+          ),
           data: (member) {
             if (member == null) return const _CompleteProfilePrompt();
             return ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
                 MemberCard(member: member, saldo: saldoAsync.value),
                 const SizedBox(height: 24),
-                Text('Menu Cepat',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
+                const KspSectionHeader('Menu Cepat'),
                 Row(
                   children: [
                     _QuickAction(
-                      icon: Icons.add_card,
+                      icon: Icons.add_card_rounded,
                       label: 'Setor',
-                      onTap: () => context.push('/notifications'),
+                      onTap: () async {
+                        if (!await ensureMemberActive(context, ref)) return;
+                        if (!context.mounted) return;
+                        await startSavingsSetorPicker(context, ref);
+                      },
                     ),
                     _QuickAction(
-                      icon: Icons.request_quote,
-                      label: 'Ajukan Pinjaman',
-                      onTap: () => context.push('/loan/apply'),
+                      icon: Icons.request_quote_rounded,
+                      label: 'Ajukan\nPinjaman',
+                      onTap: () async {
+                        if (!await ensureMemberActive(context, ref)) return;
+                        if (!context.mounted) return;
+                        context.push('/loan/apply');
+                      },
                     ),
                     _QuickAction(
-                      icon: Icons.receipt_long,
+                      icon: Icons.receipt_long_rounded,
                       label: 'Riwayat',
-                      onTap: () {},
+                      onTap: () => context.push('/riwayat'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                _SavingsSummary(),
+                const SizedBox(height: 20),
+                const _SavingsSummary(),
               ],
             );
           },
@@ -95,6 +100,8 @@ class BerandaTab extends ConsumerWidget {
 }
 
 class _SavingsSummary extends ConsumerWidget {
+  const _SavingsSummary();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final accounts = ref.watch(myAccountsProvider);
@@ -104,19 +111,17 @@ class _SavingsSummary extends ConsumerWidget {
       data: (list) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Rincian Simpanan',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
+          const KspSectionHeader('Rincian Simpanan'),
           ...list.map(
-            (a) => Card(
-              child: ListTile(
-                leading: const Icon(Icons.account_balance_wallet_outlined),
-                title: Text('Simpanan ${a.tipe[0].toUpperCase()}${a.tipe.substring(1)}'),
-                trailing: Text(
-                  formatRupiah(a.saldo),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
+            (a) => KspListTile(
+              icon: switch (a.tipe) {
+                'pokok' => Icons.lock_outline_rounded,
+                'wajib' => Icons.event_repeat_rounded,
+                _ => Icons.volunteer_activism_rounded,
+              },
+              title:
+                  'Simpanan ${a.tipe[0].toUpperCase()}${a.tipe.substring(1)}',
+              trailing: KspAmountText(a.saldo),
             ),
           ),
         ],
@@ -126,29 +131,61 @@ class _SavingsSummary extends ConsumerWidget {
 }
 
 class _QuickAction extends StatelessWidget {
-  const _QuickAction({required this.icon, required this.label, required this.onTap});
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Column(
-            children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                child: Icon(icon, color: Theme.of(context).colorScheme.primary),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: scheme.outline.withValues(alpha: 0.4)),
               ),
-              const SizedBox(height: 8),
-              Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
-            ],
+              child: Column(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          scheme.primaryContainer,
+                          scheme.primaryContainer.withValues(alpha: 0.5),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: kBrandDark),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          height: 1.15,
+                        ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -161,42 +198,15 @@ class _CompleteProfilePrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        const SizedBox(height: 60),
-        const Icon(Icons.badge_outlined, size: 72, color: Colors.grey),
-        const SizedBox(height: 16),
-        const Text('Lengkapi Profil Anggota',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        const Text(
+    return KspEmptyState(
+      icon: Icons.badge_outlined,
+      title: 'Lengkapi Profil Anggota',
+      subtitle:
           'Anda belum terdaftar sebagai anggota. Lengkapi data diri untuk mulai.',
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 24),
-        FilledButton(
-          onPressed: () => context.push('/profile/edit'),
-          child: const Text('Lengkapi Sekarang'),
-        ),
-      ],
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message});
-  final String message;
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      children: [
-        const SizedBox(height: 100),
-        const Icon(Icons.error_outline, size: 48, color: Colors.red),
-        const SizedBox(height: 12),
-        Center(child: Text(message, textAlign: TextAlign.center)),
-      ],
+      action: FilledButton(
+        onPressed: () => context.push('/profile/edit'),
+        child: const Text('Lengkapi Sekarang'),
+      ),
     );
   }
 }

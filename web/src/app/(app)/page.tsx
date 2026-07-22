@@ -1,6 +1,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { SimpananBarChart, LoanStatusPie } from '@/components/DashboardCharts';
 import { formatRupiah, type DashboardSummary } from '@/lib/types';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 
 function StatCard({
   label,
@@ -14,11 +21,13 @@ function StatCard({
   accent?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${accent ?? ''}`}>{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
-    </div>
+    <Card>
+      <CardHeader className="pb-0">
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className={`text-2xl font-bold ${accent ?? ''}`}>{value}</CardTitle>
+        {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
+      </CardHeader>
+    </Card>
   );
 }
 
@@ -48,7 +57,7 @@ export default async function DashboardPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm text-slate-500">Ringkasan operasional koperasi</p>
+        <p className="text-muted-foreground text-sm">Ringkasan operasional koperasi</p>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -60,7 +69,7 @@ export default async function DashboardPage() {
         <StatCard
           label="Total Simpanan"
           value={formatRupiah(s.total_simpanan)}
-          accent="text-teal-600"
+          accent="text-primary"
         />
         <StatCard
           label="Outstanding Pinjaman"
@@ -70,24 +79,32 @@ export default async function DashboardPage() {
         <StatCard
           label="Tunggakan"
           value={formatRupiah(s.tunggakan)}
-          accent="text-red-600"
+          accent="text-destructive"
           hint={`${s.pengajuan_pending ?? 0} pengajuan menunggu`}
         />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 font-semibold">Simpanan per Jenis</h2>
-          <SimpananBarChart data={simpananBar} />
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 font-semibold">Distribusi Status Pinjaman</h2>
-          {loanPie.length > 0 ? (
-            <LoanStatusPie data={loanPie} />
-          ) : (
-            <p className="py-16 text-center text-slate-400">Belum ada data pinjaman</p>
-          )}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Simpanan per Jenis</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SimpananBarChart data={simpananBar} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Distribusi Status Pinjaman</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loanPie.length > 0 ? (
+              <LoanStatusPie data={loanPie} />
+            ) : (
+              <p className="text-muted-foreground py-16 text-center">Belum ada data pinjaman</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

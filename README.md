@@ -12,9 +12,9 @@ Aplikasi POS untuk Koperasi Simpan Pinjam. Terdiri dari:
 | Layer     | Teknologi                                             |
 | --------- | ----------------------------------------------------- |
 | Mobile    | Flutter 3, Riverpod, go_router, supabase_flutter      |
-| Web       | Next.js (App Router), Tailwind, Recharts, @supabase/ssr |
+| Web       | Next.js (App Router), Tailwind, shadcn/ui, Recharts, @supabase/ssr |
 | Backend   | Supabase (Postgres, Auth, Storage, Realtime, Edge Functions) |
-| Payment   | Midtrans Snap (sandbox), abstraksi `PaymentProvider`  |
+| Payment   | Xendit Invoice, abstraksi `PaymentProvider`          |
 | Notifikasi| Firebase Cloud Messaging (FCM) + `pg_cron`            |
 
 ## Quick Start

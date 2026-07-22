@@ -3,6 +3,7 @@ export type SavingsType = 'pokok' | 'wajib' | 'sukarela';
 export type LoanStatus = 'pengajuan' | 'approved' | 'rejected' | 'active' | 'lunas';
 export type InstallmentStatus = 'belum' | 'lunas' | 'telat';
 export type StaffRole = 'teller' | 'pengurus';
+export type DisbursementStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 export interface Member {
   id: string;
@@ -15,6 +16,9 @@ export interface Member {
   foto_ktp_path: string | null;
   status: MemberStatus;
   tanggal_gabung: string | null;
+  bank_code: string | null;
+  account_number: string | null;
+  account_holder_name: string | null;
   created_at: string;
 }
 

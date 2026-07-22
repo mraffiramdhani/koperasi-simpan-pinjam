@@ -11,6 +11,9 @@ class Member {
     this.phone,
     this.fotoKtpPath,
     this.tanggalGabung,
+    this.bankCode,
+    this.accountNumber,
+    this.accountHolderName,
   });
 
   final String id;
@@ -22,8 +25,19 @@ class Member {
   final String? phone;
   final String? fotoKtpPath;
   final String? tanggalGabung;
+  final String? bankCode;
+  final String? accountNumber;
+  final String? accountHolderName;
 
   bool get isActive => status == 'active';
+
+  bool get hasBankAccount =>
+      bankCode != null &&
+      bankCode!.isNotEmpty &&
+      accountNumber != null &&
+      accountNumber!.isNotEmpty &&
+      accountHolderName != null &&
+      accountHolderName!.isNotEmpty;
 
   factory Member.fromJson(Map<String, dynamic> j) => Member(
         id: j['id'] as String,
@@ -35,6 +49,9 @@ class Member {
         phone: j['phone'] as String?,
         fotoKtpPath: j['foto_ktp_path'] as String?,
         tanggalGabung: j['tanggal_gabung'] as String?,
+        bankCode: j['bank_code'] as String?,
+        accountNumber: j['account_number'] as String?,
+        accountHolderName: j['account_holder_name'] as String?,
       );
 }
 
@@ -135,6 +152,44 @@ class Installment {
         total: j['total'] as num,
         status: j['status'] as String,
       );
+}
+
+class Disbursement {
+  Disbursement({
+    required this.id,
+    required this.loanId,
+    required this.amount,
+    required this.bankCode,
+    required this.accountNumber,
+    required this.accountHolderName,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String loanId;
+  final num amount;
+  final String bankCode;
+  final String accountNumber;
+  final String accountHolderName;
+  final String status;
+  final String createdAt;
+
+  factory Disbursement.fromJson(Map<String, dynamic> j) => Disbursement(
+        id: j['id'] as String,
+        loanId: j['loan_id'] as String,
+        amount: j['amount'] as num,
+        bankCode: j['bank_code'] as String,
+        accountNumber: j['account_number'] as String,
+        accountHolderName: j['account_holder_name'] as String,
+        status: j['status'] as String,
+        createdAt: j['created_at'] as String,
+      );
+
+  String get maskedAccount {
+    if (accountNumber.length <= 4) return accountNumber;
+    return '****${accountNumber.substring(accountNumber.length - 4)}';
+  }
 }
 
 class AppNotification {

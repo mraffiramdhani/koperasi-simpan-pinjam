@@ -28,7 +28,8 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isAuthRoute = path.startsWith('/login');
+  const isAuthRoute =
+    path.startsWith('/login') || path.startsWith('/reset-password');
 
   // Belum login dan bukan halaman login -> redirect ke login
   if (!user && !isAuthRoute) {

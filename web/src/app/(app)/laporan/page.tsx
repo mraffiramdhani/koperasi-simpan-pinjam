@@ -2,6 +2,21 @@ import { createClient } from '@/lib/supabase/server';
 import { CashflowChart } from '@/components/DashboardCharts';
 import { ExportButton } from '@/components/ExportButton';
 import { formatRupiah, formatTanggal } from '@/lib/types';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 const BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
@@ -25,7 +40,6 @@ export default async function LaporanPage() {
     .select('jenis, nominal, created_at')
     .gte('created_at', sinceDate.toISOString());
 
-  // Agregasi arus kas per bulan (6 bulan terakhir)
   const buckets = new Map<string, { masuk: number; keluar: number }>();
   for (let i = 5; i >= 0; i--) {
     const d = new Date();
@@ -69,62 +83,70 @@ export default async function LaporanPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Laporan</h1>
-        <p className="text-sm text-slate-500">Arus kas simpanan & daftar tunggakan</p>
+        <p className="text-muted-foreground text-sm">Arus kas simpanan & daftar tunggakan</p>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 font-semibold">Arus Kas Simpanan (6 Bulan Terakhir)</h2>
-        <CashflowChart data={cashflow} />
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Arus Kas Simpanan (6 Bulan Terakhir)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CashflowChart data={cashflow} />
+        </CardContent>
+      </Card>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="mb-4 flex items-center justify-between">
+      <Card>
+        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
           <div>
-            <h2 className="font-semibold">Daftar Tunggakan</h2>
-            <p className="text-sm text-red-600">
+            <CardTitle>Daftar Tunggakan</CardTitle>
+            <CardDescription className="text-destructive">
               Total: {formatRupiah(totalTunggakan)} ({overdue.length} angsuran)
-            </p>
+            </CardDescription>
           </div>
           <ExportButton rows={exportRows} filename="tunggakan.csv" />
-        </div>
-
-        <div className="overflow-hidden rounded-lg border border-slate-200">
-          <table className="w-full text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Anggota</th>
-                <th className="px-4 py-3 font-medium">Angsuran Ke</th>
-                <th className="px-4 py-3 font-medium">Jatuh Tempo</th>
-                <th className="px-4 py-3 font-medium">Nominal</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {overdue.map((o, i) => (
-                <tr key={i} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <div className="font-medium">{o.loans?.members?.nama ?? '-'}</div>
-                    <div className="font-mono text-xs text-slate-400">
-                      {o.loans?.members?.no_anggota ?? '-'}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">{o.angsuran_ke}</td>
-                  <td className="px-4 py-3">{formatTanggal(o.jatuh_tempo)}</td>
-                  <td className="px-4 py-3 font-medium text-red-600">
-                    {formatRupiah(o.total)}
-                  </td>
-                </tr>
-              ))}
-              {overdue.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-slate-400">
-                    Tidak ada tunggakan 🎉
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50 hover:bg-muted/50">
+                  <TableHead className="px-4">Anggota</TableHead>
+                  <TableHead className="px-4">Angsuran Ke</TableHead>
+                  <TableHead className="px-4">Jatuh Tempo</TableHead>
+                  <TableHead className="px-4">Nominal</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {overdue.map((o, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="px-4">
+                      <div className="font-medium">{o.loans?.members?.nama ?? '-'}</div>
+                      <div className="text-muted-foreground font-mono text-xs">
+                        {o.loans?.members?.no_anggota ?? '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4">{o.angsuran_ke}</TableCell>
+                    <TableCell className="px-4">{formatTanggal(o.jatuh_tempo)}</TableCell>
+                    <TableCell className="text-destructive px-4 font-medium">
+                      {formatRupiah(o.total)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {overdue.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="text-muted-foreground px-4 py-10 text-center"
+                    >
+                      Tidak ada tunggakan
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

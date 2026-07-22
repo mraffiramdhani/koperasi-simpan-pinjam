@@ -4,6 +4,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { setorTunai, tarikTunai } from '@/lib/actions';
 import { formatRupiah, type SavingsType } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { NativeSelect } from '@/components/ui/native-select';
+import {
+  Card,
+  CardContent,
+  CardTitle,
+} from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 type MemberLite = { id: string; no_anggota: string | null; nama: string };
 type Account = { id: string; tipe: SavingsType; saldo: number };
@@ -72,126 +83,131 @@ export default function TellerPage() {
       (m.no_anggota ?? '').toLowerCase().includes(query.toLowerCase()),
   );
 
+  const isError = message?.startsWith('Gagal') || message === 'Nominal tidak valid';
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold">POS Teller</h1>
-        <p className="text-sm text-slate-500">Catat setoran & penarikan tunai anggota</p>
+        <p className="text-muted-foreground text-sm">Catat setoran & penarikan tunai anggota</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-        {/* Pencarian anggota */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari nama / no. anggota..."
-            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-          />
-          <div className="max-h-96 space-y-1 overflow-auto">
-            {filtered.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => pick(m)}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${
-                  selected?.id === m.id ? 'bg-teal-50 text-teal-700' : 'hover:bg-slate-50'
-                }`}
-              >
-                <span className="font-medium">{m.nama}</span>
-                <span className="font-mono text-xs text-slate-400">{m.no_anggota}</span>
-              </button>
-            ))}
-            {filtered.length === 0 && (
-              <p className="py-6 text-center text-sm text-slate-400">
-                Tidak ada anggota
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Panel transaksi */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6">
-          {!selected ? (
-            <p className="py-16 text-center text-slate-400">
-              Pilih anggota untuk memulai transaksi
-            </p>
-          ) : (
-            <div className="space-y-5">
-              <div>
-                <h2 className="text-lg font-semibold">{selected.nama}</h2>
-                <p className="font-mono text-xs text-slate-400">
-                  {selected.no_anggota}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {accounts.map((a) => (
-                  <div
-                    key={a.id}
-                    className="rounded-lg border border-slate-200 p-3 text-center"
-                  >
-                    <p className="text-xs capitalize text-slate-500">{a.tipe}</p>
-                    <p className="text-sm font-bold">{formatRupiah(a.saldo)}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Jenis Simpanan</label>
-                  <select
-                    value={tipe}
-                    onChange={(e) => setTipe(e.target.value as SavingsType)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm capitalize outline-none focus:border-teal-500"
-                  >
-                    <option value="pokok">Pokok</option>
-                    <option value="wajib">Wajib</option>
-                    <option value="sukarela">Sukarela</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Nominal</label>
-                  <input
-                    type="number"
-                    value={nominal}
-                    onChange={(e) => setNominal(e.target.value)}
-                    placeholder="0"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-                  />
-                </div>
-              </div>
-
-              {message && (
-                <p
-                  className={`rounded-lg px-3 py-2 text-sm ${
-                    message.startsWith('Gagal')
-                      ? 'bg-red-50 text-red-600'
-                      : 'bg-green-50 text-green-700'
-                  }`}
+        <Card>
+          <CardContent className="pt-(--card-spacing)">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Cari nama / no. anggota..."
+              className="mb-3"
+            />
+            <div className="max-h-96 space-y-1 overflow-auto">
+              {filtered.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => pick(m)}
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                    selected?.id === m.id
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-muted',
+                  )}
                 >
-                  {message}
+                  <span className="font-medium">{m.nama}</span>
+                  <span className="text-muted-foreground font-mono text-xs">{m.no_anggota}</span>
+                </button>
+              ))}
+              {filtered.length === 0 && (
+                <p className="text-muted-foreground py-6 text-center text-sm">
+                  Tidak ada anggota
                 </p>
               )}
-
-              <div className="flex gap-3">
-                <button
-                  disabled={busy}
-                  onClick={() => submit('setor')}
-                  className="flex-1 rounded-lg bg-teal-600 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-50"
-                >
-                  Setor
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() => submit('tarik')}
-                  className="flex-1 rounded-lg border border-slate-300 py-2.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Tarik
-                </button>
-              </div>
             </div>
-          )}
-        </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-(--card-spacing)">
+            {!selected ? (
+              <p className="text-muted-foreground py-16 text-center">
+                Pilih anggota untuk memulai transaksi
+              </p>
+            ) : (
+              <div className="space-y-5">
+                <div>
+                  <CardTitle className="text-lg">{selected.nama}</CardTitle>
+                  <p className="text-muted-foreground font-mono text-xs">
+                    {selected.no_anggota}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  {accounts.map((a) => (
+                    <div
+                      key={a.id}
+                      className="rounded-lg border p-3 text-center"
+                    >
+                      <p className="text-muted-foreground text-xs capitalize">{a.tipe}</p>
+                      <p className="text-sm font-bold">{formatRupiah(a.saldo)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="tipe">Jenis Simpanan</Label>
+                    <NativeSelect
+                      id="tipe"
+                      value={tipe}
+                      onChange={(e) => setTipe(e.target.value as SavingsType)}
+                      className="capitalize"
+                    >
+                      <option value="pokok">Pokok</option>
+                      <option value="wajib">Wajib</option>
+                      <option value="sukarela">Sukarela</option>
+                    </NativeSelect>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="nominal">Nominal</Label>
+                    <Input
+                      id="nominal"
+                      type="number"
+                      value={nominal}
+                      onChange={(e) => setNominal(e.target.value)}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                {message && (
+                  <Alert
+                    variant={isError ? 'destructive' : 'default'}
+                    className={isError ? undefined : 'border-green-200 bg-green-50'}
+                  >
+                    <AlertDescription className={isError ? undefined : 'text-green-700'}>
+                      {message}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="flex gap-3">
+                  <Button className="flex-1" disabled={busy} onClick={() => submit('setor')}>
+                    Setor
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    disabled={busy}
+                    onClick={() => submit('tarik')}
+                  >
+                    Tarik
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

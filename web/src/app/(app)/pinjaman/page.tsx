@@ -1,104 +1,206 @@
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { LoanActions } from '@/components/LoanActions';
-import { formatRupiah, formatTanggal, type LoanStatus } from '@/lib/types';
+import { LoanRow, type LoanRowData } from '@/components/LoanRow';
+import type { LoanStatus } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import {
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
-const statusStyle: Record<LoanStatus, string> = {
-  pengajuan: 'bg-amber-100 text-amber-700',
-  approved: 'bg-blue-100 text-blue-700',
-  active: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
-  lunas: 'bg-teal-100 text-teal-700',
-};
+const PAGE_SIZE = 20;
 
-const statusLabel: Record<LoanStatus, string> = {
-  pengajuan: 'Menunggu',
-  approved: 'Disetujui',
-  active: 'Aktif',
-  rejected: 'Ditolak',
-  lunas: 'Lunas',
-};
+const statusOptions: { value: string; label: string }[] = [
+  { value: 'all', label: 'Semua status' },
+  { value: 'pengajuan', label: 'Menunggu' },
+  { value: 'approved', label: 'Menunggu Pencairan' },
+  { value: 'active', label: 'Aktif' },
+  { value: 'lunas', label: 'Lunas' },
+  { value: 'rejected', label: 'Ditolak' },
+];
 
-type LoanRow = {
-  id: string;
-  pokok: number;
-  tenor: number;
-  jasa_persen: number;
-  tujuan: string | null;
-  status: LoanStatus;
-  tanggal_pengajuan: string;
-  members: { nama: string; no_anggota: string | null } | null;
-};
+export default async function PinjamanPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string; page?: string }>;
+}) {
+  const { q, status, page: pageParam } = await searchParams;
+  const page = Math.max(1, Number(pageParam) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
 
-export default async function PinjamanPage() {
   const supabase = await createClient();
-  const { data } = await supabase
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staff } = user
+    ? await supabase.from('staff_roles').select('role').eq('user_id', user.id).maybeSingle()
+    : { data: null };
+  const canManage = staff?.role === 'pengurus';
+
+  let memberIds: string[] | null = null;
+  if (q?.trim()) {
+    const term = `%${q.trim()}%`;
+    const { data: matched } = await supabase
+      .from('members')
+      .select('id')
+      .or(`nama.ilike.${term},no_anggota.ilike.${term}`);
+    memberIds = matched?.map((m) => m.id) ?? [];
+    if (memberIds.length === 0) {
+      return (
+        <PinjamanPageShell
+          q={q}
+          status={status}
+          page={page}
+          totalPages={1}
+          count={0}
+        >
+          <tr>
+            <td colSpan={8} className="text-muted-foreground px-4 py-10 text-center">
+              Tidak ada pinjaman ditemukan
+            </td>
+          </tr>
+        </PinjamanPageShell>
+      );
+    }
+  }
+
+  let query = supabase
     .from('loans')
-    .select('id, pokok, tenor, jasa_persen, tujuan, status, tanggal_pengajuan, members(nama, no_anggota)')
+    .select(
+      `id, pokok, tenor, jasa_persen, tujuan, status, tanggal_pengajuan,
+       members(nama, no_anggota, bank_code, account_number, account_holder_name),
+       disbursements(status, created_at),
+       loan_installments(id, angsuran_ke, jatuh_tempo, nominal_pokok, nominal_jasa, total, status, paid_at)`,
+      { count: 'exact' },
+    )
     .order('tanggal_pengajuan', { ascending: false });
 
-  const loans = (data ?? []) as unknown as LoanRow[];
+  if (memberIds) query = query.in('member_id', memberIds);
+  if (status && status !== 'all') {
+    query = query.eq('status', status as LoanStatus);
+  }
 
+  const { data, count } = await query.range(from, to);
+  const loans = (data ?? []) as unknown as LoanRowData[];
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+
+  function pageUrl(p: number) {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (status) params.set('status', status);
+    params.set('page', String(p));
+    const qs = params.toString();
+    return `/pinjaman${qs ? `?${qs}` : ''}`;
+  }
+
+  return (
+    <PinjamanPageShell
+      q={q}
+      status={status}
+      page={page}
+      totalPages={totalPages}
+      count={count ?? 0}
+      pageUrl={pageUrl}
+    >
+      {loans.map((l) => (
+        <LoanRow key={l.id} loan={l} canManage={canManage} />
+      ))}
+      {loans.length === 0 && (
+        <tr>
+          <td colSpan={8} className="text-muted-foreground px-4 py-10 text-center">
+            Belum ada pinjaman
+          </td>
+        </tr>
+      )}
+    </PinjamanPageShell>
+  );
+}
+
+function PinjamanPageShell({
+  q,
+  status,
+  page,
+  totalPages,
+  count,
+  pageUrl,
+  children,
+}: {
+  q?: string;
+  status?: string;
+  page: number;
+  totalPages: number;
+  count: number;
+  pageUrl?: (p: number) => string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Pinjaman</h1>
-        <p className="text-sm text-slate-500">Pengajuan dan status pinjaman anggota</p>
+        <p className="text-muted-foreground text-sm">Pengajuan dan status pinjaman anggota</p>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Anggota</th>
-              <th className="px-4 py-3 font-medium">Jumlah</th>
-              <th className="px-4 py-3 font-medium">Tenor</th>
-              <th className="px-4 py-3 font-medium">Jasa</th>
-              <th className="px-4 py-3 font-medium">Tujuan</th>
-              <th className="px-4 py-3 font-medium">Tgl Pengajuan</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {loans.map((l) => (
-              <tr key={l.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3">
-                  <div className="font-medium">{l.members?.nama ?? '-'}</div>
-                  <div className="font-mono text-xs text-slate-400">
-                    {l.members?.no_anggota ?? '-'}
-                  </div>
-                </td>
-                <td className="px-4 py-3 font-medium">{formatRupiah(l.pokok)}</td>
-                <td className="px-4 py-3">{l.tenor} bln</td>
-                <td className="px-4 py-3">{l.jasa_persen}%/bln</td>
-                <td className="px-4 py-3">{l.tujuan ?? '-'}</td>
-                <td className="px-4 py-3">{formatTanggal(l.tanggal_pengajuan)}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle[l.status]}`}
-                  >
-                    {statusLabel[l.status]}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {l.status === 'pengajuan' ? (
-                    <LoanActions loanId={l.id} />
-                  ) : (
-                    <span className="text-xs text-slate-400">-</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {loans.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
-                  Belum ada pinjaman
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <form method="get" className="mb-4 flex flex-wrap gap-3">
+        <Input
+          name="q"
+          defaultValue={q ?? ''}
+          placeholder="Cari nama / no. anggota..."
+          className="min-w-[200px] flex-1"
+        />
+        <NativeSelect name="status" defaultValue={status ?? 'all'} className="w-auto">
+          {statusOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </NativeSelect>
+        <Button type="submit">Filter</Button>
+      </form>
+
+      <div className="bg-card overflow-hidden rounded-xl ring-1 ring-foreground/10">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50 hover:bg-muted/50">
+              <TableHead className="px-4">Anggota</TableHead>
+              <TableHead className="px-4">Jumlah</TableHead>
+              <TableHead className="px-4">Tenor</TableHead>
+              <TableHead className="px-4">Jasa</TableHead>
+              <TableHead className="px-4">Tujuan</TableHead>
+              <TableHead className="px-4">Tgl Pengajuan</TableHead>
+              <TableHead className="px-4">Status</TableHead>
+              <TableHead className="px-4">Aksi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>{children}</TableBody>
+        </Table>
       </div>
+
+      {totalPages > 1 && pageUrl && (
+        <div className="text-muted-foreground mt-4 flex items-center justify-between text-sm">
+          <span>
+            Halaman {page} dari {totalPages} ({count} pinjaman)
+          </span>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={pageUrl(page - 1)}>← Sebelumnya</Link>
+              </Button>
+            )}
+            {page < totalPages && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={pageUrl(page + 1)}>Selanjutnya →</Link>
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

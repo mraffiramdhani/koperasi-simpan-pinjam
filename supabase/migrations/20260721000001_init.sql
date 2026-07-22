@@ -169,7 +169,7 @@ create table payments (
   member_id         uuid not null references members (id) on delete cascade,
   purpose           payment_purpose not null,
   ref_id            uuid not null,  -- installment id atau savings_account id
-  provider          text not null default 'midtrans',
+  provider          text not null default 'xendit',
   order_id          text unique not null,
   external_id       text,
   nominal           numeric(14, 2) not null check (nominal > 0),

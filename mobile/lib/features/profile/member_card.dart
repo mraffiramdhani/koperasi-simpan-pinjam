@@ -14,19 +14,20 @@ class MemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [kBrandColor, Color(0xFF00897B)],
+          colors: [kBrandDark, kBrandColor, Color(0xFF2DD4BF)],
+          stops: [0.0, 0.55, 1.0],
         ),
         boxShadow: [
           BoxShadow(
-            color: kBrandColor.withValues(alpha: 0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            color: kBrandColor.withValues(alpha: 0.35),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -36,33 +37,71 @@ class MemberCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'KARTU ANGGOTA',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  letterSpacing: 2,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.account_balance_rounded,
+                        color: Colors.white, size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'KARTU ANGGOTA',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.6,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  switch (member.status) {
+                    'active' => 'Aktif',
+                    'pending' => 'Menunggu',
+                    'inactive' => 'Nonaktif',
+                    _ => 'Ditolak',
+                  },
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              _StatusBadge(status: member.status),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
           Text(
             member.noAnggota ?? 'Menunggu aktivasi',
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             member.nama,
-            style: const TextStyle(color: Colors.white, fontSize: 16),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.92),
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -70,48 +109,33 @@ class MemberCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Total Simpanan',
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  const SizedBox(height: 2),
+                  Text(
+                    'Total Simpanan',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.75),
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Text(
                     formatRupiah(saldo),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
               ),
-              const Icon(Icons.savings_rounded, color: Colors.white54, size: 32),
+              Icon(
+                Icons.savings_rounded,
+                color: Colors.white.withValues(alpha: 0.45),
+                size: 36,
+              ),
             ],
           ),
         ],
       ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = switch (status) {
-      'active' => 'Aktif',
-      'pending' => 'Menunggu',
-      'inactive' => 'Nonaktif',
-      _ => 'Ditolak',
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white24,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(label,
-          style: const TextStyle(color: Colors.white, fontSize: 12)),
     );
   }
 }

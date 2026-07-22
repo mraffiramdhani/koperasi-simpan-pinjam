@@ -24,6 +24,9 @@ class MemberRepository {
     String? nik,
     String? alamat,
     String? phone,
+    String? bankCode,
+    String? accountNumber,
+    String? accountHolderName,
   }) async {
     final uid = supabase.auth.currentUser!.id;
     final row = await supabase
@@ -34,6 +37,9 @@ class MemberRepository {
           'nik': nik,
           'alamat': alamat,
           'phone': phone,
+          'bank_code': bankCode,
+          'account_number': accountNumber,
+          'account_holder_name': accountHolderName,
         })
         .select()
         .single();
@@ -46,6 +52,9 @@ class MemberRepository {
     String? nik,
     String? alamat,
     String? phone,
+    String? bankCode,
+    String? accountNumber,
+    String? accountHolderName,
   }) async {
     final row = await supabase
         .from('members')
@@ -54,6 +63,9 @@ class MemberRepository {
           if (nik != null) 'nik': nik,
           if (alamat != null) 'alamat': alamat,
           if (phone != null) 'phone': phone,
+          if (bankCode != null) 'bank_code': bankCode,
+          if (accountNumber != null) 'account_number': accountNumber,
+          if (accountHolderName != null) 'account_holder_name': accountHolderName,
         })
         .eq('id', id)
         .select()

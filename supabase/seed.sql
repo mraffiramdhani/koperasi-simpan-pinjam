@@ -8,25 +8,35 @@
 -- ============================================================
 
 -- ---------- AUTH USERS ----------
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
-  email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+-- Token fields harus '' (bukan NULL), kalau tidak GoTrue cloud error:
+-- "Database error querying schema"
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password,
+  email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+  created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change
+)
 values
   ('00000000-0000-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
    'authenticated', 'authenticated', 'pengurus@koperasi.test',
    crypt('password123', gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"nama":"Pengurus Koperasi"}', now(), now()),
+   '{"provider":"email","providers":["email"]}', '{"nama":"Pengurus Koperasi"}', now(), now(),
+   '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '22222222-2222-2222-2222-222222222222',
    'authenticated', 'authenticated', 'teller@koperasi.test',
    crypt('password123', gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"nama":"Teller Kasir"}', now(), now()),
+   '{"provider":"email","providers":["email"]}', '{"nama":"Teller Kasir"}', now(), now(),
+   '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '33333333-3333-3333-3333-333333333333',
    'authenticated', 'authenticated', 'budi@koperasi.test',
    crypt('password123', gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"nama":"Budi Santoso"}', now(), now()),
+   '{"provider":"email","providers":["email"]}', '{"nama":"Budi Santoso"}', now(), now(),
+   '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '44444444-4444-4444-4444-444444444444',
    'authenticated', 'authenticated', 'siti@koperasi.test',
    crypt('password123', gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"nama":"Siti Aminah"}', now(), now());
+   '{"provider":"email","providers":["email"]}', '{"nama":"Siti Aminah"}', now(), now(),
+   '', '', '', '');
 
 insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
 values
@@ -45,11 +55,14 @@ insert into staff_roles (user_id, role, nama) values
   ('22222222-2222-2222-2222-222222222222', 'teller', 'Teller Kasir');
 
 -- ---------- MEMBERS (trigger membuat rekening simpanan otomatis) ----------
-insert into members (id, no_anggota, user_id, nama, nik, alamat, phone, status, tanggal_gabung) values
+insert into members (id, no_anggota, user_id, nama, nik, alamat, phone, status, tanggal_gabung,
+  bank_code, account_number, account_holder_name) values
   ('a0000000-0000-0000-0000-000000000001', 'KSP-2026-000001', '33333333-3333-3333-3333-333333333333',
-   'Budi Santoso', '3201010101010001', 'Jl. Merdeka No. 1, Jakarta', '081200000001', 'active', '2026-01-10'),
+   'Budi Santoso', '3201010101010001', 'Jl. Merdeka No. 1, Jakarta', '081200000001', 'active', '2026-01-10',
+   'BCA', '1234567890', 'Budi Santoso'),
   ('a0000000-0000-0000-0000-000000000002', 'KSP-2026-000002', '44444444-4444-4444-4444-444444444444',
-   'Siti Aminah', '3201010101010002', 'Jl. Melati No. 2, Bandung', '081200000002', 'active', '2026-02-15');
+   'Siti Aminah', '3201010101010002', 'Jl. Melati No. 2, Bandung', '081200000002', 'active', '2026-02-15',
+   'BNI', '0987654321', 'Siti Aminah');
 
 -- ---------- SIMPANAN (trigger otomatis update saldo) ----------
 -- Budi
@@ -81,6 +94,14 @@ insert into loans (id, member_id, pokok, tenor, jasa_persen, tujuan, status, app
 values ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
         3000000, 6, 1.5, 'Modal usaha warung', 'active',
         '11111111-1111-1111-1111-111111111111', now() - interval '2 month');
+
+-- Pencairan sudah selesai (sesuai status pinjaman 'active')
+insert into disbursements (loan_id, member_id, external_id, provider_ref, amount,
+  bank_code, account_number, account_holder_name, status, created_by)
+values ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
+        'KSP-DSB-seed-0001', 'seed-provider-ref-0001', 3000000,
+        'BCA', '1234567890', 'Budi Santoso', 'completed',
+        '11111111-1111-1111-1111-111111111111');
 
 -- Jadwal angsuran: pokok/bln = 500000, jasa/bln = 45000, total = 545000
 -- Angsuran 1 lunas, angsuran 2 telat (menunggak), sisanya belum

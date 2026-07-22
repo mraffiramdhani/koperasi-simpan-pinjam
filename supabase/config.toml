@@ -389,8 +389,20 @@ deno_version = 2
 [functions.create-payment]
 verify_jwt = true
 
-# Webhook dipanggil oleh Midtrans (tanpa JWT); signature diverifikasi manual
+# Cek status pembayaran aktif ke Xendit (fallback bila webhook belum masuk)
+[functions.check-payment]
+verify_jwt = true
+
+# Webhook dipanggil oleh Xendit (tanpa JWT); callback token diverifikasi manual
 [functions.payment-webhook]
+verify_jwt = false
+
+# Endpoint pencairan pinjaman dipanggil dari web dashboard (butuh JWT pengurus)
+[functions.create-disbursement]
+verify_jwt = true
+
+# Webhook dipanggil oleh Xendit (tanpa JWT); callback token diverifikasi manual
+[functions.disbursement-webhook]
 verify_jwt = false
 
 # Reminder dijalankan oleh pg_cron via service role

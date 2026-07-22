@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/notification_service.dart';
 import 'supabase.dart';
 
 class AuthRepository {
@@ -16,7 +17,19 @@ class AuthRepository {
     );
   }
 
-  Future<void> signOut() => supabase.auth.signOut();
+  Future<void> signOut() async {
+    try {
+      await NotificationService.instance.clearTokenForCurrentUser();
+    } catch (_) {}
+    await supabase.auth.signOut();
+  }
+
+  Future<void> resetPassword(String email) {
+    return supabase.auth.resetPasswordForEmail(
+      email,
+      redirectTo: 'io.supabase.koperasi://reset-password',
+    );
+  }
 
   User? get currentUser => supabase.auth.currentUser;
 }

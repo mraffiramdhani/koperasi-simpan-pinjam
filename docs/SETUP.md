@@ -9,7 +9,7 @@ Payment gateway, FCM) dari nol.
 - Node.js 20+ dan npm
 - Flutter 3.4+ (Dart 3.11+)
 - Supabase CLI (`npx supabase ...` sudah cukup, tidak perlu install global)
-- Akun sandbox Midtrans (gratis) - opsional untuk uji pembayaran
+- Akun Xendit (gratis, mode Test) - opsional untuk uji pembayaran
 - Project Firebase (gratis) - opsional untuk push notification
 
 ---
@@ -52,7 +52,7 @@ Akun demo (password semua: `password123`):
 ```bash
 npx supabase link --project-ref <project-ref>
 npx supabase db push          # apply migrations ke cloud
-npx supabase functions deploy create-payment payment-webhook reminder
+npx supabase functions deploy create-payment payment-webhook create-disbursement disbursement-webhook reminder
 ```
 
 ---
@@ -60,7 +60,7 @@ npx supabase functions deploy create-payment payment-webhook reminder
 ## 2. Edge Functions & Secrets
 
 Salin `supabase/functions/.env.example` menjadi `supabase/functions/.env` dan isi
-kredensial Midtrans/FCM.
+kredensial Xendit/FCM.
 
 Jalankan lokal:
 
@@ -74,23 +74,27 @@ Set secrets di cloud:
 npx supabase secrets set --env-file supabase/functions/.env
 ```
 
-| Function          | verify_jwt | Pemanggil                     |
-| ----------------- | ---------- | ----------------------------- |
-| `create-payment`  | true       | Mobile app (JWT anggota)      |
-| `payment-webhook` | false      | Midtrans (signature verified) |
-| `reminder`        | false      | pg_cron / manual              |
+| Function                | verify_jwt | Pemanggil                         |
+| ----------------------- | ---------- | --------------------------------- |
+| `create-payment`        | true       | Mobile app (JWT anggota)          |
+| `payment-webhook`       | false      | Xendit (callback token verified)  |
+| `create-disbursement`   | true       | Web dashboard (JWT pengurus)      |
+| `disbursement-webhook`  | false      | Xendit (callback token verified)  |
+| `reminder`              | false      | pg_cron / manual                  |
 
 ---
 
-## 3. Payment Gateway (Midtrans Sandbox)
+## 3. Payment Gateway (Xendit)
 
-1. Daftar di https://dashboard.sandbox.midtrans.com
-2. Menu **Settings > Access Keys**: salin `Server Key` dan `Client Key`.
-3. Isi `MIDTRANS_SERVER_KEY` di `supabase/functions/.env`.
-4. Menu **Settings > Configuration**: set **Payment Notification URL** ke:
+1. Daftar di https://dashboard.xendit.co (gunakan mode **Test** untuk sandbox).
+2. Menu **Settings > API Keys**: buat Secret Key dengan permission **Invoices =
+   Write** (dan **Disbursements = Write**, lihat bagian 3.1), salin ke
+   `XENDIT_SECRET_KEY` di `supabase/functions/.env`.
+3. Menu **Settings > Webhooks**: salin **Callback Verification Token** ke
+   `XENDIT_CALLBACK_TOKEN`, lalu set URL webhook **Invoices paid** ke:
    `https://<project-ref>.functions.supabase.co/payment-webhook`
    (untuk lokal, gunakan tunnel seperti ngrok yang mengarah ke port functions).
-5. Uji pembayaran memakai kartu/VA simulator Midtrans.
+4. Uji pembayaran memakai simulator VA/e-wallet di dashboard Xendit.
 
 Alur pembayaran:
 
@@ -98,19 +102,59 @@ Alur pembayaran:
 sequenceDiagram
   participant M as Mobile (anggota)
   participant CP as create-payment
-  participant MT as Midtrans
+  participant XD as Xendit
   participant WH as payment-webhook
   participant DB as Postgres
 
   M->>CP: purpose, ref_id, nominal (JWT)
   CP->>DB: insert payments (pending)
-  CP->>MT: Snap create transaction
-  MT-->>CP: redirect_url + token
-  CP-->>M: redirect_url
-  M->>MT: buka Snap (WebView), bayar
-  MT->>WH: notification (signature)
+  CP->>XD: create invoice
+  XD-->>CP: invoice_url + id
+  CP-->>M: invoice_url
+  M->>XD: buka invoice (WebView), bayar
+  XD->>WH: callback (x-callback-token)
   WH->>DB: update payments = paid, terapkan efek
   M->>DB: poll status (Cek Status)
+```
+
+### 3.1 Pencairan Pinjaman (Xendit Disbursement)
+
+1. Di API Key yang sama (langkah 3.2), pastikan permission **Disbursements =
+   Write** aktif. Semua permission lain (VA, e-wallet, cards, retail outlets,
+   money-out lain, saldo, report, xenPlatform, dll.) tetap **None**.
+2. Menu **Settings > Webhooks**: set URL webhook **Disbursement** ke:
+   `https://<project-ref>.functions.supabase.co/disbursement-webhook`
+   (memakai Callback Verification Token yang sama dengan langkah 3.3).
+3. Isi rekening bank anggota (kode bank, no. rekening, nama pemilik) di
+   halaman **Anggota** pada web dashboard sebelum mencairkan pinjaman. Kode
+   bank yang didukung Xendit antara lain `BCA`, `BNI`, `BRI`, `MANDIRI`,
+   `CIMB`, `PERMATA`.
+4. Setelah pengurus **Setujui** pengajuan pinjaman (status menjadi
+   `approved` / "Menunggu Pencairan"), klik **Cairkan via Xendit** di halaman
+   **Pinjaman**. Uji dengan data simulasi Xendit test mode untuk hasil
+   `COMPLETED` atau `FAILED`.
+
+> Catatan: Disbursement (money-out) di akun Xendit **Live** umumnya memerlukan
+> verifikasi dokumen legal bisnis terlebih dahulu. Mode **Test** tetap bisa
+> dipakai untuk uji alur ini tanpa verifikasi.
+
+Alur pencairan:
+
+```mermaid
+sequenceDiagram
+  participant P as Pengurus (web)
+  participant EF as create-disbursement
+  participant XD as Xendit
+  participant WH as disbursement-webhook
+  participant DB as Postgres
+
+  P->>EF: Cairkan (loan_id, JWT pengurus)
+  EF->>DB: insert disbursements (pending)
+  EF->>XD: create disbursement
+  XD-->>EF: id + status
+  EF->>DB: update disbursements (processing)
+  XD->>WH: callback COMPLETED / FAILED
+  WH->>DB: update disbursements + loans.status = active jika sukses
 ```
 
 ---
@@ -165,25 +209,46 @@ Tanpa konfigurasi ini, notifikasi **in-app** tetap berjalan (dibuat oleh
 
 ## 7. Penjadwalan Reminder (pg_cron)
 
-Migration `20260721000005_cron_reminders.sql` mengaktifkan `pg_cron` + `pg_net`,
-membuat fungsi `generate_due_reminders()`, dan menjadwalkannya tiap hari 08:00.
+Migration `20260721000005_cron_reminders.sql` membuat `generate_due_reminders()`.
+Migration `20260721000009` + `000010` menjadwalkan job `daily-reminder-push` (08:00)
+yang memanggil `invoke_daily_reminder()`.
 
-Untuk juga mengirim push tiap hari, jadwalkan pemanggilan Edge Function
-`reminder` via `pg_net` (contoh, jalankan sekali di SQL editor cloud):
+- **Tanpa konfigurasi ekstra**: job hanya membuat notifikasi **in-app**.
+- **Dengan push FCM**: isi tabel `app_config` di **SQL Editor** dashboard
+  (jangan pakai `ALTER DATABASE SET` — ditolak di Supabase Cloud):
 
 ```sql
-select cron.schedule(
-  'daily-reminder-push',
-  '5 8 * * *',
-  $$
-  select net.http_post(
-    url := 'https://<project-ref>.functions.supabase.co/reminder',
-    headers := jsonb_build_object(
-      'Authorization', 'Bearer <SERVICE_ROLE_KEY>',
-      'Content-Type', 'application/json'
-    ),
-    body := '{}'::jsonb
-  );
-  $$
-);
+insert into app_config (key, value) values
+  (
+    'edge_reminder_url',
+    'https://<project-ref>.functions.supabase.co/reminder'
+  ),
+  (
+    'service_role_key',
+    '<SERVICE_ROLE_KEY>'  -- Project Settings > API > service_role
+  )
+on conflict (key) do update
+  set value = excluded.value, updated_at = now();
+```
+
+Lokal (contoh URL):
+
+```sql
+insert into app_config (key, value) values
+  ('edge_reminder_url', 'http://host.docker.internal:54321/functions/v1/reminder'),
+  ('service_role_key', '<SERVICE_ROLE_KEY>')
+on conflict (key) do update
+  set value = excluded.value, updated_at = now();
+```
+
+Setelah itu, job akan memanggil Edge Function `reminder` (in-app + FCM push).
+Pastikan `FCM_*` sudah di-set sebagai secrets functions (lihat §6).
+
+Uji manual:
+
+```bash
+curl -X POST 'https://<project-ref>.functions.supabase.co/reminder' \
+  -H "Authorization: Bearer <SERVICE_ROLE_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
 ```

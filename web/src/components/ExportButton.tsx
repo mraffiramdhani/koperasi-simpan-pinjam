@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+
 type Row = Record<string, string | number>;
 
 export function ExportButton({
@@ -36,12 +38,8 @@ export function ExportButton({
   }
 
   return (
-    <button
-      onClick={exportCsv}
-      disabled={rows.length === 0}
-      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-    >
+    <Button variant="outline" size="sm" onClick={exportCsv} disabled={rows.length === 0}>
       {label}
-    </button>
+    </Button>
   );
 }

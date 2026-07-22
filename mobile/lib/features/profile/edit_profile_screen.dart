@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/member_repository.dart';
 
+const _bankOptions = ['BCA', 'BNI', 'BRI', 'MANDIRI', 'CIMB', 'PERMATA'];
+
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -16,9 +18,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _nik = TextEditingController();
   final _phone = TextEditingController();
   final _alamat = TextEditingController();
+  final _accountNumber = TextEditingController();
+  final _accountHolderName = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
   bool _prefilled = false;
+  String? _bankCode;
 
   @override
   void dispose() {
@@ -26,6 +31,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _nik.dispose();
     _phone.dispose();
     _alamat.dispose();
+    _accountNumber.dispose();
+    _accountHolderName.dispose();
     super.dispose();
   }
 
@@ -40,6 +47,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           nik: _nik.text.trim(),
           phone: _phone.text.trim(),
           alamat: _alamat.text.trim(),
+          bankCode: _bankCode,
+          accountNumber: _accountNumber.text.trim(),
+          accountHolderName: _accountHolderName.text.trim(),
         );
       } else {
         await repo.updateMember(
@@ -48,6 +58,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           nik: _nik.text.trim(),
           phone: _phone.text.trim(),
           alamat: _alamat.text.trim(),
+          bankCode: _bankCode,
+          accountNumber: _accountNumber.text.trim(),
+          accountHolderName: _accountHolderName.text.trim(),
         );
       }
       ref.read(memberRefreshProvider.notifier).state++;
@@ -78,6 +91,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             _nik.text = member.nik ?? '';
             _phone.text = member.phone ?? '';
             _alamat.text = member.alamat ?? '';
+            _bankCode = member.bankCode;
+            _accountNumber.text = member.accountNumber ?? '';
+            _accountHolderName.text = member.accountHolderName ?? '';
             _prefilled = true;
           }
           return SingleChildScrollView(
@@ -110,6 +126,32 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     controller: _alamat,
                     maxLines: 3,
                     decoration: const InputDecoration(labelText: 'Alamat'),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Rekening Pencairan',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: _bankCode,
+                    decoration: const InputDecoration(labelText: 'Bank'),
+                    items: _bankOptions
+                        .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _bankCode = v),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _accountNumber,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'No. Rekening'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _accountHolderName,
+                    decoration:
+                        const InputDecoration(labelText: 'Nama Pemilik Rekening'),
                   ),
                   const SizedBox(height: 24),
                   FilledButton(

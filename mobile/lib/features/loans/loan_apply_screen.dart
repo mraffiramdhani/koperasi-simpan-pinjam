@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../core/member_guard.dart';
 import '../../data/loan_repository.dart';
+import '../../data/member_repository.dart';
 import '../../data/savings_repository.dart';
+import '../../widgets/ksp_ui.dart';
 
 class LoanApplyScreen extends ConsumerStatefulWidget {
   const LoanApplyScreen({super.key});
@@ -34,6 +37,7 @@ class _LoanApplyScreenState extends ConsumerState<LoanApplyScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!await ensureMemberActive(context, ref)) return;
     setState(() => _loading = true);
     try {
       await ref.read(loanRepositoryProvider).ajukanPinjaman(
@@ -62,15 +66,33 @@ class _LoanApplyScreenState extends ConsumerState<LoanApplyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final memberAsync = ref.watch(myMemberProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Ajukan Pinjaman')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      body: memberAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('$e')),
+        data: (member) {
+          final needsBank = member != null && !member.hasBankAccount;
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (needsBank)
+                    KspInfoBanner(
+                      message:
+                          'Rekening bank belum lengkap. Lengkapi rekening pencairan agar dana pinjaman bisa ditransfer.',
+                      icon: Icons.account_balance_outlined,
+                      action: TextButton(
+                        onPressed: () => context.push('/profile/edit'),
+                        child: const Text('Lengkapi Rekening'),
+                      ),
+                    ),
+                  if (needsBank) const SizedBox(height: 16),
               TextFormField(
                 controller: _pokok,
                 keyboardType: TextInputType.number,
@@ -86,7 +108,8 @@ class _LoanApplyScreenState extends ConsumerState<LoanApplyScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              Text('Tenor: $_tenor bulan'),
+              Text('Tenor: $_tenor bulan',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
               Slider(
                 value: _tenor.toDouble(),
                 min: 3,
@@ -109,34 +132,37 @@ class _LoanApplyScreenState extends ConsumerState<LoanApplyScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      const Text('Estimasi Angsuran / Bulan'),
+                      Text(
+                        'Estimasi Angsuran / Bulan',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         formatRupiah(_pokokValue > 0 ? _angsuranPerBulan : 0),
-                        style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.bold),
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
                       ),
                       const SizedBox(height: 4),
-                      Text('Jasa flat $_jasaPersen% per bulan',
-                          style: const TextStyle(fontSize: 12)),
+                      Text(
+                        'Jasa flat $_jasaPersen% per bulan',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Ajukan Sekarang'),
+              KspLoadingButton(
+                loading: _loading,
+                onPressed: _submit,
+                label: 'Ajukan Sekarang',
               ),
-            ],
-          ),
-        ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

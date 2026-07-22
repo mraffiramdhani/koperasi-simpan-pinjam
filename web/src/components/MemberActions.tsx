@@ -2,26 +2,39 @@
 
 import { useTransition } from 'react';
 import { activateMember, rejectMember } from '@/lib/actions';
+import { Button } from '@/components/ui/button';
 
-export function MemberActions({ memberId }: { memberId: string }) {
+export function MemberActions({
+  memberId,
+  canManage = false,
+}: {
+  memberId: string;
+  /** Hanya pengurus yang boleh aktifkan/tolak */
+  canManage?: boolean;
+}) {
   const [pending, start] = useTransition();
+
+  if (!canManage) {
+    return <span className="text-muted-foreground text-xs">-</span>;
+  }
 
   return (
     <div className="flex gap-2">
-      <button
+      <Button
+        size="xs"
         disabled={pending}
         onClick={() => start(() => activateMember(memberId).then(() => {}))}
-        className="rounded-md bg-teal-600 px-3 py-1 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50"
       >
         Aktifkan
-      </button>
-      <button
+      </Button>
+      <Button
+        size="xs"
+        variant="destructive"
         disabled={pending}
         onClick={() => start(() => rejectMember(memberId).then(() => {}))}
-        className="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
       >
         Tolak
-      </button>
+      </Button>
     </div>
   );
 }

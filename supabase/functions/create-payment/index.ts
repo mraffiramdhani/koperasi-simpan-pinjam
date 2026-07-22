@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
-import { getPaymentProvider } from '../_shared/payment_provider.ts';
+import { getPaymentProvider, isXenditTestKey } from '../_shared/payment_provider.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -32,10 +32,18 @@ Deno.serve(async (req) => {
 
     const { data: member } = await admin
       .from('members')
-      .select('id, nama')
+      .select('id, nama, status')
       .eq('user_id', user.id)
       .maybeSingle();
     if (!member) return jsonResponse({ error: 'Anggota tidak ditemukan' }, 404);
+
+    // Setoran hanya untuk anggota aktif; angsuran tetap boleh (kewajiban bayar)
+    if (purpose === 'simpanan' && member.status !== 'active') {
+      return jsonResponse(
+        { error: 'Keanggotaan belum aktif. Menunggu verifikasi pengurus.' },
+        403,
+      );
+    }
 
     // Validasi kepemilikan ref_id
     if (purpose === 'simpanan') {
@@ -84,7 +92,12 @@ Deno.serve(async (req) => {
       .update({ snap_token: tx.token, snap_redirect_url: tx.redirectUrl })
       .eq('order_id', orderId);
 
-    return jsonResponse({ order_id: orderId, redirect_url: tx.redirectUrl });
+    const testMode = isXenditTestKey(Deno.env.get('XENDIT_SECRET_KEY') ?? '');
+    return jsonResponse({
+      order_id: orderId,
+      redirect_url: tx.redirectUrl,
+      test_mode: testMode,
+    });
   } catch (e) {
     return jsonResponse({ error: String(e) }, 500);
   }

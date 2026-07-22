@@ -1,5 +1,5 @@
-// Abstraksi payment provider. Tambah provider baru (mis. Xendit) dengan
-// mengimplementasikan interface PaymentProvider dan menukar instance di factory.
+// Abstraksi payment provider. Tambah provider baru dengan mengimplementasikan
+// interface PaymentProvider dan menukar instance di factory.
 
 export interface CreateTransactionInput {
   orderId: string;
@@ -21,27 +21,39 @@ export interface WebhookResult {
 
 export interface PaymentProvider {
   createTransaction(input: CreateTransactionInput): Promise<CreateTransactionResult>;
-  parseWebhook(payload: Record<string, unknown>): Promise<WebhookResult>;
+  getInvoiceStatus(invoiceId: string): Promise<WebhookResult>;
+  simulateQrPayment(orderId: string, amount: number): Promise<WebhookResult>;
+  isTestMode(): boolean;
+  parseWebhook(
+    payload: Record<string, unknown>,
+    headers?: Headers,
+  ): Promise<WebhookResult>;
 }
 
-// ---------------- Midtrans (Snap) ----------------
-class MidtransProvider implements PaymentProvider {
-  constructor(
-    private serverKey: string,
-    private isProduction: boolean,
-  ) {}
+export function isXenditTestKey(secretKey: string): boolean {
+  return secretKey.startsWith('xnd_development_');
+}
 
-  private get snapBaseUrl(): string {
-    return this.isProduction
-      ? 'https://app.midtrans.com/snap/v1/transactions'
-      : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
-  }
+function mapXenditStatus(xenditStatus: string): WebhookResult['status'] {
+  const status = xenditStatus.toUpperCase();
+  if (status === 'PAID' || status === 'SETTLED') return 'paid';
+  if (status === 'PENDING') return 'pending';
+  if (status === 'EXPIRED') return 'expired';
+  return 'failed';
+}
+
+// ---------------- Xendit (Invoice) ----------------
+class XenditProvider implements PaymentProvider {
+  constructor(
+    private secretKey: string,
+    private callbackToken: string,
+  ) {}
 
   async createTransaction(
     input: CreateTransactionInput,
   ): Promise<CreateTransactionResult> {
-    const auth = btoa(`${this.serverKey}:`);
-    const res = await fetch(this.snapBaseUrl, {
+    const auth = btoa(`${this.secretKey}:`);
+    const res = await fetch('https://api.xendit.co/v2/invoices', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -49,75 +61,118 @@ class MidtransProvider implements PaymentProvider {
         Authorization: `Basic ${auth}`,
       },
       body: JSON.stringify({
-        transaction_details: {
-          order_id: input.orderId,
-          gross_amount: Math.round(input.amount),
-        },
-        customer_details: {
-          first_name: input.customerName,
-          email: input.customerEmail,
-        },
-        credit_card: { secure: true },
+        external_id: input.orderId,
+        amount: Math.round(input.amount),
+        payer_email: input.customerEmail,
+        customer: { given_names: input.customerName },
+        description: `Pembayaran ${input.orderId}`,
       }),
     });
 
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Midtrans error ${res.status}: ${text}`);
+      throw new Error(`Xendit error ${res.status}: ${text}`);
     }
 
     const data = await res.json();
-    return { redirectUrl: data.redirect_url, token: data.token };
+    return { redirectUrl: data.invoice_url, token: data.id };
+  }
+
+  isTestMode(): boolean {
+    return isXenditTestKey(this.secretKey);
+  }
+
+  async simulateQrPayment(orderId: string, amount: number): Promise<WebhookResult> {
+    if (!this.isTestMode()) {
+      throw new Error('Simulasi pembayaran hanya tersedia di mode test Xendit');
+    }
+
+    const auth = btoa(`${this.secretKey}:`);
+    const res = await fetch(
+      `https://api.xendit.co/qr_codes/${encodeURIComponent(orderId)}/payments/simulate`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Basic ${auth}`,
+        },
+        body: JSON.stringify({ amount: Math.round(amount) }),
+      },
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Xendit simulate error ${res.status}: ${text}`);
+    }
+
+    // Setelah simulasi, ambil status invoice terbaru.
+    const invoicesRes = await fetch(
+      `https://api.xendit.co/v2/invoices?external_id=${encodeURIComponent(orderId)}`,
+      {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Basic ${auth}`,
+        },
+      },
+    );
+
+    if (!invoicesRes.ok) {
+      const text = await invoicesRes.text();
+      throw new Error(`Xendit invoice lookup error ${invoicesRes.status}: ${text}`);
+    }
+
+    const invoices = await invoicesRes.json();
+    const invoice = Array.isArray(invoices) ? invoices[0] : invoices;
+    if (!invoice?.id) {
+      throw new Error('Invoice tidak ditemukan setelah simulasi');
+    }
+
+    return this.getInvoiceStatus(String(invoice.id));
+  }
+
+  async getInvoiceStatus(invoiceId: string): Promise<WebhookResult> {
+    const auth = btoa(`${this.secretKey}:`);
+    const res = await fetch(`https://api.xendit.co/v2/invoices/${invoiceId}`, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Basic ${auth}`,
+      },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Xendit error ${res.status}: ${text}`);
+    }
+
+    const data = await res.json();
+    return {
+      orderId: String(data.external_id ?? ''),
+      status: mapXenditStatus(String(data.status ?? '')),
+      raw: data,
+    };
   }
 
   async parseWebhook(
     payload: Record<string, unknown>,
+    headers?: Headers,
   ): Promise<WebhookResult> {
-    const orderId = String(payload.order_id ?? '');
-    const statusCode = String(payload.status_code ?? '');
-    const grossAmount = String(payload.gross_amount ?? '');
-    const signatureKey = String(payload.signature_key ?? '');
-
-    // Verifikasi signature: sha512(order_id + status_code + gross_amount + server_key)
-    const expected = await sha512(
-      `${orderId}${statusCode}${grossAmount}${this.serverKey}`,
-    );
-    if (expected !== signatureKey) {
-      throw new Error('Signature tidak valid');
+    // Xendit memverifikasi callback lewat header x-callback-token
+    const token = headers?.get('x-callback-token') ?? '';
+    if (!this.callbackToken || token !== this.callbackToken) {
+      throw new Error('Callback token tidak valid');
     }
 
-    const txStatus = String(payload.transaction_status ?? '');
-    const fraud = String(payload.fraud_status ?? 'accept');
+    const orderId = String(payload.external_id ?? '');
+    const xenditStatus = String(payload.status ?? '');
 
-    let status: WebhookResult['status'] = 'pending';
-    if (txStatus === 'capture') {
-      status = fraud === 'accept' ? 'paid' : 'pending';
-    } else if (txStatus === 'settlement') {
-      status = 'paid';
-    } else if (txStatus === 'pending') {
-      status = 'pending';
-    } else if (['deny', 'cancel', 'failure'].includes(txStatus)) {
-      status = 'failed';
-    } else if (txStatus === 'expire') {
-      status = 'expired';
-    }
-
-    return { orderId, status, raw: payload };
+    return { orderId, status: mapXenditStatus(xenditStatus), raw: payload };
   }
-}
-
-async function sha512(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const hash = await crypto.subtle.digest('SHA-512', data);
-  return [...new Uint8Array(hash)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 // ---------------- Factory ----------------
 export function getPaymentProvider(): PaymentProvider {
-  const serverKey = Deno.env.get('MIDTRANS_SERVER_KEY') ?? '';
-  const isProduction = Deno.env.get('MIDTRANS_IS_PRODUCTION') === 'true';
-  if (!serverKey) throw new Error('MIDTRANS_SERVER_KEY belum diset');
-  return new MidtransProvider(serverKey, isProduction);
+  const secretKey = Deno.env.get('XENDIT_SECRET_KEY') ?? '';
+  const callbackToken = Deno.env.get('XENDIT_CALLBACK_TOKEN') ?? '';
+  if (!secretKey) throw new Error('XENDIT_SECRET_KEY belum diset');
+  return new XenditProvider(secretKey, callbackToken);
 }

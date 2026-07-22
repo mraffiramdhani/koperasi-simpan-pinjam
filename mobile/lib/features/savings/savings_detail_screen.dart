@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
-import '../../data/payment_repository.dart';
+import '../../core/member_guard.dart';
+import '../../core/theme.dart';
 import '../../data/savings_repository.dart';
 import '../../models.dart';
-import '../payment/payment_webview_screen.dart';
+import '../../widgets/ksp_ui.dart';
+import 'savings_setor_flow.dart';
 
 final _txnProvider =
     FutureProvider.family<List<SavingsTxn>, String>((ref, accountId) async {
@@ -17,65 +19,73 @@ class SavingsDetailScreen extends ConsumerWidget {
   const SavingsDetailScreen({super.key, required this.account});
   final SavingsAccount account;
 
-  Future<void> _setor(BuildContext context, WidgetRef ref) async {
-    final nominal = await _askNominal(context);
-    if (nominal == null) return;
-
-    try {
-      final result = await ref.read(paymentRepositoryProvider).createPayment(
-            purpose: 'simpanan',
-            refId: account.id,
-            nominal: nominal,
-          );
-      if (!context.mounted) return;
-      final ok = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => PaymentWebViewScreen(
-            redirectUrl: result.redirectUrl,
-            orderId: result.orderId,
-          ),
-        ),
-      );
-      if (ok == true && context.mounted) {
-        ref.read(dataRefreshProvider.notifier).state++;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Setoran berhasil')),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal: $e')),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final txnAsync = ref.watch(_txnProvider(account.id));
+    final tipeLabel =
+        'Simpanan ${account.tipe[0].toUpperCase()}${account.tipe.substring(1)}';
 
     return Scaffold(
-      appBar: AppBar(title: Text('Simpanan ${account.tipe}')),
+      appBar: AppBar(title: Text(tipeLabel)),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _setor(context, ref),
-        icon: const Icon(Icons.add),
+        onPressed: () async {
+          if (!await ensureMemberActive(context, ref)) return;
+          if (!context.mounted) return;
+          await startSavingsSetor(context, ref, account);
+        },
+        icon: const Icon(Icons.add_rounded),
         label: const Text('Setor'),
       ),
       body: Column(
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            color: Theme.of(context).colorScheme.primaryContainer,
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primaryContainer,
+                  Colors.white,
+                ],
+              ),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.35),
+              ),
+            ),
             child: Column(
               children: [
-                const Text('Saldo Saat Ini'),
+                Text(
+                  'Saldo Saat Ini',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.55),
+                      ),
+                ),
                 const SizedBox(height: 6),
-                Text(formatRupiah(account.saldo),
-                    style: const TextStyle(
-                        fontSize: 26, fontWeight: FontWeight.bold)),
+                Text(
+                  formatRupiah(account.saldo),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: kBrandDark,
+                      ),
+                ),
               ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Mutasi',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
             ),
           ),
           Expanded(
@@ -84,32 +94,26 @@ class SavingsDetailScreen extends ConsumerWidget {
               error: (e, _) => Center(child: Text('$e')),
               data: (list) {
                 if (list.isEmpty) {
-                  return const Center(child: Text('Belum ada transaksi'));
+                  return const KspEmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Belum ada transaksi',
+                  );
                 }
-                return ListView.separated(
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
                   itemCount: list.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (_, i) {
                     final t = list[i];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor:
-                            t.isSetor ? Colors.green.shade50 : Colors.red.shade50,
-                        child: Icon(
-                          t.isSetor ? Icons.arrow_downward : Icons.arrow_upward,
-                          color: t.isSetor ? Colors.green : Colors.red,
-                        ),
-                      ),
-                      title: Text(t.isSetor ? 'Setor' : 'Tarik'),
-                      subtitle: Text(
-                          '${formatTanggalStr(t.createdAt)} - ${t.metode}'),
-                      trailing: Text(
-                        '${t.isSetor ? '+' : '-'}${formatRupiah(t.nominal)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: t.isSetor ? Colors.green : Colors.red,
-                        ),
-                      ),
+                    return KspListTile(
+                      icon: t.isSetor
+                          ? Icons.arrow_downward_rounded
+                          : Icons.arrow_upward_rounded,
+                      iconColor: t.isSetor
+                          ? const Color(0xFF059669)
+                          : const Color(0xFFDC2626),
+                      title: t.isSetor ? 'Setor' : 'Tarik',
+                      subtitle: '${formatTanggalStr(t.createdAt)} · ${t.metode}',
+                      trailing: KspAmountText(t.nominal, isCredit: t.isSetor),
                     );
                   },
                 );
@@ -120,36 +124,4 @@ class SavingsDetailScreen extends ConsumerWidget {
       ),
     );
   }
-}
-
-Future<num?> _askNominal(BuildContext context) {
-  final controller = TextEditingController();
-  return showDialog<num>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Nominal Setoran'),
-      content: TextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        autofocus: true,
-        decoration: const InputDecoration(
-          prefixText: 'Rp ',
-          hintText: '0',
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Batal'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final v = num.tryParse(controller.text.trim());
-            if (v != null && v > 0) Navigator.pop(ctx, v);
-          },
-          child: const Text('Lanjut Bayar'),
-        ),
-      ],
-    ),
-  );
 }

@@ -11,8 +11,10 @@ erDiagram
   members ||--o{ loans : "member_id"
   members ||--o{ payments : "member_id"
   members ||--o{ notifications : "member_id"
+  members ||--o{ disbursements : "member_id"
   savings_accounts ||--o{ savings_transactions : "account_id"
   loans ||--o{ loan_installments : "loan_id"
+  loans ||--o{ disbursements : "loan_id"
   payments ||--o| savings_transactions : "payment_id"
   payments ||--o| loan_installments : "payment_id"
 
@@ -27,6 +29,9 @@ erDiagram
     text fcm_token
     enum status
     date tanggal_gabung
+    text bank_code
+    text account_number
+    text account_holder_name
   }
 
   staff_roles {
@@ -90,6 +95,19 @@ erDiagram
     enum tipe
     timestamptz read_at
   }
+
+  disbursements {
+    uuid id PK
+    uuid loan_id FK
+    uuid member_id FK
+    text external_id
+    text provider_ref
+    numeric amount
+    text bank_code
+    text account_number
+    text account_holder_name
+    enum status
+  }
 ```
 
 ## Aturan Bisnis Utama
@@ -99,9 +117,13 @@ erDiagram
   `apply_savings_txn` (menolak penarikan melebihi saldo).
 - **Pinjaman**: pengajuan oleh anggota (`rpc_ajukan_pinjaman`), disetujui pengurus
   (`rpc_approve_pinjaman`) yang otomatis membuat jadwal angsuran (jasa flat per
-  bulan dari pokok).
+  bulan dari pokok) dan mengubah status menjadi `approved` (menunggu pencairan).
+- **Pencairan**: pengurus mencairkan pinjaman `approved` via Edge Function
+  `create-disbursement` (Xendit Disbursement) ke rekening bank anggota. Status
+  pinjaman baru menjadi `active` setelah `disbursement-webhook` menerima callback
+  `COMPLETED`; jika `FAILED`, pinjaman tetap `approved` agar bisa dicairkan ulang.
 - **Pembayaran**: mutasi keuangan via gateway ditangani `payment-webhook` dengan
-  service role (setelah verifikasi signature Midtrans). Transaksi tunai via RPC
+  service role (setelah verifikasi callback token Xendit). Transaksi tunai via RPC
   `rpc_setor_tunai` / `rpc_tarik_tunai` / `rpc_bayar_angsuran_tunai` (khusus staff).
 - **Keamanan**: RLS memastikan anggota hanya melihat datanya sendiri; staff sesuai
   peran. Semua perhitungan uang dieksekusi server-side.

@@ -2,23 +2,34 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import {
+  LayoutDashboard,
+  Users,
+  CreditCard,
+  Receipt,
+  LineChart,
+  Landmark,
+  BookOpen,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const nav = [
-  { href: '/', label: 'Dashboard', icon: '📊' },
-  { href: '/anggota', label: 'Anggota', icon: '👥' },
-  { href: '/pinjaman', label: 'Pinjaman', icon: '💳' },
-  { href: '/teller', label: 'POS Teller', icon: '🧾' },
-  { href: '/laporan', label: 'Laporan', icon: '📈' },
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/anggota', label: 'Anggota', icon: Users },
+  { href: '/pinjaman', label: 'Pinjaman', icon: CreditCard },
+  { href: '/teller', label: 'POS Teller', icon: Receipt },
+  { href: '/laporan', label: 'Laporan', icon: LineChart },
+  { href: '/panduan', label: 'Panduan', icon: BookOpen },
 ];
 
 export function Sidebar({ role, nama }: { role: string; nama: string }) {
   const pathname = usePathname();
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
-      <div className="border-b border-slate-200 px-6 py-5">
+    <aside className="bg-sidebar text-sidebar-foreground flex w-64 shrink-0 flex-col border-r">
+      <div className="border-b px-6 py-5">
         <div className="flex items-center gap-2 text-lg font-bold">
-          <span>🏦</span>
+          <Landmark className="text-primary size-5" />
           <span>Koperasi SP</span>
         </div>
       </div>
@@ -27,26 +38,28 @@ export function Sidebar({ role, nama }: { role: string; nama: string }) {
         {nav.map((item) => {
           const active =
             item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+          const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 active
-                  ? 'bg-teal-50 text-teal-700'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
             >
-              <span>{item.icon}</span>
+              <Icon className="size-4 shrink-0" />
               {item.label}
             </Link>
           );
         })}
       </nav>
 
-      <div className="border-t border-slate-200 p-4">
+      <div className="border-t p-4">
         <p className="text-sm font-medium">{nama}</p>
-        <p className="text-xs capitalize text-slate-500">{role}</p>
+        <p className="text-muted-foreground text-xs capitalize">{role}</p>
       </div>
     </aside>
   );

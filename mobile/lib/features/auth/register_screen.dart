@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../data/auth_repository.dart';
 import '../../data/member_repository.dart';
 import '../../data/supabase.dart';
+import '../../services/notification_service.dart';
+import '../../widgets/ksp_ui.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -45,6 +47,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               nama: _nama.text.trim(),
               phone: _phone.text.trim(),
             );
+        await NotificationService.instance.saveTokenForCurrentUser();
         if (mounted) context.go('/');
       } else {
         if (mounted) {
@@ -120,15 +123,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       (v == null || v.length < 6) ? 'Minimal 6 karakter' : null,
                 ),
                 const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _loading ? null : _submit,
-                  child: _loading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Daftar'),
+                KspLoadingButton(
+                  loading: _loading,
+                  onPressed: _submit,
+                  label: 'Daftar',
                 ),
               ],
             ),

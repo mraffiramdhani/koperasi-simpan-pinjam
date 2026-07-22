@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/env.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
+import 'data/supabase.dart';
 import 'services/notification_service.dart';
 
 Future<void> main() async {
@@ -15,7 +16,18 @@ Future<void> main() async {
   await Supabase.initialize(
     url: Env.supabaseUrl,
     anonKey: Env.supabaseAnonKey,
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+    ),
   );
+
+  // Deep link reset password → arahkan ke layar set password baru
+  supabase.auth.onAuthStateChange.listen((data) {
+    if (data.event == AuthChangeEvent.passwordRecovery) {
+      markPasswordRecovery();
+      appRouter.go('/reset-password');
+    }
+  });
 
   // Inisialisasi push notification (aman jika Firebase belum dikonfigurasi).
   await NotificationService.instance.init();
@@ -31,6 +43,7 @@ class KoperasiApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'Koperasi Simpan Pinjam',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: NotificationService.scaffoldMessengerKey,
       theme: buildAppTheme(),
       routerConfig: appRouter,
     );
