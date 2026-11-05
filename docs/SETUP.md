@@ -47,6 +47,15 @@ Akun demo (password semua: `password123`):
 | budi@koperasi.test     | anggota  | Mobile app     |
 | siti@koperasi.test     | anggota  | Mobile app     |
 
+Data demo tambahan (24 anggota, riwayat simpanan 6+ bulan, pinjaman di semua
+status, pencairan & tunggakan) untuk showcase. Aman dijalankan ulang untuk
+me-reset data demo; data `seed.sql` tidak tersentuh:
+
+```bash
+npx supabase db query -f supabase/demo-seed.sql            # lokal
+npx supabase db query --remote -f supabase/demo-seed.sql   # cloud
+```
+
 ### 1.3 Deploy ke Supabase Cloud (produksi)
 
 ```bash

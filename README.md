@@ -13,6 +13,12 @@ End-to-end digital platform for Indonesian savings & loan cooperatives (*koperas
 
 Demo runs on sandbox payment keys; no real money moves. Data may be reset.
 
+| Dashboard | Loans |
+| --- | --- |
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Loans](docs/screenshots/pinjaman.png) |
+| **Reports** | **Members** |
+| ![Reports](docs/screenshots/laporan.png) | ![Members](docs/screenshots/anggota.png) |
+
 ## The Problem
 
 Many cooperatives still run on paper ledgers and spreadsheets. Members queue at the office to check balances or pay installments, loan approval is manual, and cash handling is error-prone with no audit trail.

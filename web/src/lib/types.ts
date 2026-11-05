@@ -74,5 +74,5 @@ export const formatRupiah = (value: number | null | undefined): string =>
 
 export const formatTanggal = (value: string | null | undefined): string =>
   value
-    ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value))
+    ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeZone: 'Asia/Jakarta' }).format(new Date(value))
     : '-';
